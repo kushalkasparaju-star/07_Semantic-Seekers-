@@ -33,9 +33,10 @@ VISION_MODEL = "llama-3.2-11b-vision-preview"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 SUPPORTED_LANGUAGES = ("en", "hi", "te")
+LANGUAGE_CHOICES = [("English", "en"), ("हिन्दी", "hi"), ("తెలుగు", "te")]
 SPEECH_LANGUAGE_MAP = {"en": "en-US", "hi": "hi-IN", "te": "te-IN"}
 LANGUAGE_NAMES = {"en": "English", "hi": "Hindi", "te": "Telugu"}
-DEFAULT_THEME = "light"
+DEFAULT_THEME = "dark"
 HINDI_HINTS = {
     "क",
     "ख",
@@ -958,14 +959,13 @@ def build_language_updates(language_code: str, theme_code: str):
     language_code = language_code if language_code in SUPPORTED_LANGUAGES else "en"
     theme_code = apply_theme_state(theme_code)
     return (
-        gr.update(value=language_code),
+        gr.update(choices=LANGUAGE_CHOICES, value=language_code),
+        language_code,
         gr.update(value=theme_toggle_label(theme_code, language_code)),
         f"# {t(language_code, 'app_title')}",
         f"{t(language_code, 'app_description')}\n\n{t(language_code, 'app_subdescription')}",
         gr.update(label=t(language_code, "question_label"), placeholder=t(language_code, "question_placeholder")),
         gr.update(value=t(language_code, "submit_button")),
-        gr.update(value=t(language_code, "voice_button")),
-        gr.update(label=t(language_code, "image_label"), placeholder=t(language_code, "image_placeholder")),
         gr.update(label=t(language_code, "route_label")),
         gr.update(label=t(language_code, "context_label")),
         gr.update(label=t(language_code, "answer_label")),
@@ -978,14 +978,13 @@ def initialize_ui(language_code: str, theme_code: str):
     language_code = language_code if language_code in SUPPORTED_LANGUAGES else "en"
     theme_code = apply_theme_state(theme_code)
     return (
-        gr.update(value=language_code),
+        gr.update(choices=LANGUAGE_CHOICES, value=language_code),
+        language_code,
         gr.update(value=theme_toggle_label(theme_code, language_code)),
         f"# {t(language_code, 'app_title')}",
         f"{t(language_code, 'app_description')}\n\n{t(language_code, 'app_subdescription')}",
         gr.update(label=t(language_code, "question_label"), placeholder=t(language_code, "question_placeholder")),
         gr.update(value=t(language_code, "submit_button")),
-        gr.update(value=t(language_code, "voice_button")),
-        gr.update(label=t(language_code, "image_label"), placeholder=t(language_code, "image_placeholder")),
         gr.update(label=t(language_code, "route_label")),
         gr.update(label=t(language_code, "context_label")),
         gr.update(label=t(language_code, "answer_label")),
@@ -1153,7 +1152,16 @@ async (languageCode) => {{
 def build_theme_init_js() -> str:
     return """
 async () => {
-    const storedTheme = localStorage.getItem('agentic_sports_router_theme') || 'light';
+    try {
+        localStorage.removeItem('agentic_sports_router_theme');
+    } catch (error) {}
+    let storedTheme = 'dark';
+    try {
+        const rawTheme = localStorage.getItem('agentic_sports_router_theme_v2');
+        if (rawTheme === 'dark' || rawTheme === 'light') {
+            storedTheme = rawTheme;
+        }
+    } catch (error) {}
     document.documentElement.setAttribute('data-theme', storedTheme);
     document.documentElement.style.colorScheme = storedTheme;
 }
@@ -1174,7 +1182,6 @@ async (themeCode, languageCode) => {{
     const nextTheme = themeCode === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', nextTheme);
     document.documentElement.style.colorScheme = nextTheme;
-    localStorage.setItem('agentic_sports_router_theme', nextTheme);
     return [nextTheme, bundle[nextTheme]];
 }}
 """
@@ -1182,7 +1189,7 @@ async (themeCode, languageCode) => {{
 
 with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
     browser_language = gr.BrowserState(default_value="en", storage_key="agentic_sports_router_lang")
-    browser_theme = gr.BrowserState(default_value=DEFAULT_THEME, storage_key="agentic_sports_router_theme")
+    browser_theme = gr.BrowserState(default_value=DEFAULT_THEME, storage_key="agentic_sports_router_theme_v2")
 
     with gr.Column(elem_id="app-shell"):
         with gr.Column(elem_classes=["hero-panel"]):
@@ -1190,7 +1197,7 @@ with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
             description_md = gr.Markdown(elem_classes=["hero-description"])
             with gr.Row(elem_classes=["toolbar-row"]):
                 language_selector = gr.Dropdown(
-                    choices=[("English", "en"), ("हिन्दी", "hi"), ("తెలుగు", "te")],
+                    choices=LANGUAGE_CHOICES,
                     value="en",
                     label=t("en", "language_label"),
                     scale=1,
@@ -1218,29 +1225,15 @@ with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
                     scale=1,
                     min_width=120,
                 )
-                voice_button = gr.Button(
-                    value=t("en", "voice_button"),
-                    variant="secondary",
-                    scale=1,
-                    min_width=120,
-                )
 
         status_box = gr.HTML(value=status_html("en", "idle"), elem_id="app-status")
 
-        with gr.Column(elem_classes=["surface-card"]):
-            image_input = gr.Image(
-                type="filepath",
-                sources=["upload"],
-                label=t("en", "image_label"),
-                placeholder=t("en", "image_placeholder"),
-                height=240,
-                show_label=True,
-            )
-            message_box = gr.Markdown(
-                value="",
-                label=t("en", "message_label"),
-                elem_classes=["message-markdown"],
-            )
+        message_box = gr.Markdown(
+            value="",
+            label=t("en", "message_label"),
+            elem_classes=["message-markdown"],
+        )
+        image_input = gr.State(value=None)
 
         with gr.Column(elem_classes=["output-card"]):
             route_box = gr.Textbox(label=t("en", "route_label"), lines=1, interactive=False)
@@ -1252,14 +1245,13 @@ with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
         build_language_updates,
         inputs=[language_selector, browser_theme],
         outputs=[
+            language_selector,
             browser_language,
             theme_button,
             title_md,
             description_md,
             question_box,
             ask_button,
-            voice_button,
-            image_input,
             route_box,
             context_box,
             answer_box,
@@ -1273,14 +1265,13 @@ with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
         initialize_ui,
         inputs=[browser_language, browser_theme],
         outputs=[
+            language_selector,
             browser_language,
             theme_button,
             title_md,
             description_md,
             question_box,
             ask_button,
-            voice_button,
-            image_input,
             route_box,
             context_box,
             answer_box,
@@ -1303,21 +1294,6 @@ with gr.Blocks(css=APP_CSS, theme=gr.themes.Soft()) as demo:
         inputs=[browser_theme, browser_language],
         outputs=[browser_theme, theme_button],
         js=build_theme_toggle_js(),
-        queue=False,
-    )
-
-    voice_button.click(
-        fn=None,
-        inputs=language_selector,
-        outputs=[question_box, message_box],
-        js=build_voice_js(),
-        queue=False,
-    )
-
-    image_input.change(
-        validate_uploaded_image,
-        inputs=[image_input, language_selector],
-        outputs=[image_input, message_box],
         queue=False,
     )
 
